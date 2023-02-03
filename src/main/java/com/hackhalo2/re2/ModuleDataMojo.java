@@ -123,7 +123,7 @@ public class ModuleDataMojo extends AbstractMojo {
         FileOutputStream fileOut = null;
         try {
             String rootDir = this.mavenSession.getExecutionRootDirectory();
-            fileOut = new FileOutputStream(new File(rootDir));
+            fileOut = new FileOutputStream(new File(rootDir+File.separator+"module.data"));
 
             TagCompound compound = builder.build();
             if(compound == null) {
