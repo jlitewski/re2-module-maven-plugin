@@ -4,8 +4,14 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+import com.hackhalo2.re2.nbt.exceptions.NBTException;
+
 public final class TagLong extends NBTTag {
     private long value;
+
+    public TagLong(DataInputStream in, boolean managed) throws NBTException, IOException {
+        super(in, managed);
+    }
 
     public TagLong(final String name, final long value) {
         super(name, TagType.LONG);
@@ -14,8 +20,6 @@ public final class TagLong extends NBTTag {
 
     @Override
     protected void readData(DataInputStream in) throws IOException {
-        this.setTagType(TagType.LONG);
-
         this.value = in.readLong();
     }
 
@@ -30,6 +34,11 @@ public final class TagLong extends NBTTag {
     @Override
     protected void writeData(DataOutputStream out) throws IOException {
         out.writeLong(this.value);
+    }
+
+    @Override
+    public byte getID() {
+        return TagType.LONG.getID();
     }
     
 }

@@ -5,6 +5,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 
 import com.hackhalo2.re2.nbt.ITag;
 import com.hackhalo2.re2.nbt.ITagContainer;
@@ -14,14 +15,11 @@ public abstract class NBTTag implements ITag {
 
     private String name = "";
     private ITagContainer parent;
-    byte tempID = -1;
-    protected final byte id;
     private final boolean managed;
 
     protected NBTTag(final String name, final TagType type) {
+        this.managed = true; //THIS HAS TO BE FIRST OR BAD THINGS HAPPEN!
         this.setName(name);
-        this.id = type.getID();
-        this.managed = true;
     }
 
     protected NBTTag(DataInputStream in, final boolean managed) throws NBTException, IOException {
@@ -33,24 +31,36 @@ public abstract class NBTTag implements ITag {
 
         if(this.managed) { //read in the name if this tag is managed
             final short nameSize = in.readShort();
+            System.out.println("Name Size: "+nameSize);
             final byte[] nameBuffer = new byte[nameSize];
 
             in.readFully(nameBuffer);
+            System.out.println("Name Byte Buffer: "+Arrays.toString(nameBuffer));
             this.setName(new String(nameBuffer, Charset.forName("UTF-8")));
         }
 
+        System.out.println("Begin reading Tag Data...");
         this.readData(in); //pass the deserialization call up to the implementing classes
-
-        if(this.tempID == -1) { //Sanity check to make sure that we didn't forget to set the ID
-            throw new NBTException("Tag ID wasn't set during deserialization!");
-        }
-
-        this.id = this.tempID; //Set our id to what was passed in
+        System.out.println("Done reading "+(this.managed ? "'"+this.getName()+"'!" : "tag!"));
     }
 
     void setName(String name) {
         //if the name is null, or if this tag isn't managed, or if the new name is the same as the old name, then return
-        if(!this.managed || name == null || name.equals(this.name)) return;
+        //TODO: Send this to a debug stream
+        if(!this.managed) {
+            System.out.println("Name wasn't set! Managed: "+this.managed);
+            return;
+        }
+
+        if(name == null) {
+            System.out.println("Name wasn't set! isNull: "+(name == null ? "true" : "false"));
+            return;
+        }
+
+        if(name.equals(this.name)) {
+            System.out.println("Name wasn't set! Equals: "+name.equals(this.name));
+            return;
+        }
 
         try {
             /* 
@@ -67,6 +77,7 @@ public abstract class NBTTag implements ITag {
             }
 
             this.name = name; //set the new name
+            System.out.println("Set Name: "+this.name);
 
             if(tempParent != null) { //If we had a parent before, readd ourselves
                 tempParent.addTag(this);
@@ -103,30 +114,21 @@ public abstract class NBTTag implements ITag {
         this.parent = newParent;
     }
 
-    @Override
-    public byte getID() {
-        return this.id;
-    }
-
-    protected void setTagType(TagType type) {
-        this.tempID = type.getID();
-    }
-
-    protected void setID(final byte id) {
-        this.tempID = id;
-    }
-
     protected abstract void readData(DataInputStream in) throws IOException;
 
     protected abstract void writeData(DataOutputStream out) throws IOException;
 
     void writeNBT(DataOutputStream out, boolean isManaged) throws IOException {
         out.writeByte(this.getID()); //Write the Tag ID
+        System.out.println("Writing Tag ID "+this.getID());
 
         if(isManaged) { //If this tag is managed, then write the name to the stream
+            System.out.print("Writing name '"+this.getName()+"'... ");
             final byte[] nameBytes = this.getNameAsBytes(); //Get the name as a byte array
             out.writeShort(nameBytes.length); //Write out how long the name is
+            System.out.println("Name Length: "+nameBytes.length);
             out.write(nameBytes); //Write out the name
+            System.out.println("Name Bytes: "+Arrays.toString(nameBytes));
         }
 
         this.writeData(out); //Pass the output stream up to the implementing classes to deal with their data
@@ -134,12 +136,17 @@ public abstract class NBTTag implements ITag {
 
     public static final TagCompound loadCompoundFromStream(DataInputStream in) throws NBTException {
         TagCompound result = null;
-        Constructor<? extends ITag> tagConstructor = null;
+        Constructor<?> tagConstructor = null;
 
         try {
-            tagConstructor = TagType.COMPOUND.getTagClass().getConstructor(DataInputStream.class, boolean.class);
+            if(TagType.valueOf(in.readByte()) != TagType.COMPOUND) {
+                throw new NBTException("Root NBT isn't a Compound!");
+            }
+            
+            tagConstructor = TagType.COMPOUND.getTagClass().getDeclaredConstructor(DataInputStream.class, boolean.class);
             tagConstructor.setAccessible(true);
             result = ((TagCompound)tagConstructor.newInstance(in, true));
+            tagConstructor.setAccessible(false);
         } catch (Exception e) {
             throw new NBTException("Issue with constructing a new Compound from the InputStream!", e);
         } finally {
@@ -153,12 +160,15 @@ public abstract class NBTTag implements ITag {
         //TODO: Should we have some file header info in the spec?
 
         try {
+            System.out.println("Writing Tag ID "+compound.getID());
             out.writeByte(compound.getID()); //Write the ID of the main compound
 
             //Write the name of the Compound
             final byte[] nameBytes = compound.getName().getBytes(Charset.forName("UTF-8"));
             out.writeShort(nameBytes.length);
+            System.out.println("Writing Name Length: "+nameBytes.length);
             out.write(nameBytes);
+            System.out.println("Writing Name Byte Array: "+Arrays.toString(nameBytes));
 
             compound.writeData(out);
         } catch(Exception e) {

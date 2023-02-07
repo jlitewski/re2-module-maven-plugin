@@ -15,6 +15,10 @@ public class TagArray extends NBTTag implements IManagedContainer {
     private TagType arrayType;
     private Map<String, ITag> arrayMap = new HashMap<>();
 
+    public TagArray(DataInputStream in, boolean managed) throws NBTException, IOException {
+        super(in, managed);
+    }
+
     public TagArray(String name, TagType arrayType) throws NBTException {
         super(name, TagType.ARRAY);
         
@@ -26,9 +30,8 @@ public class TagArray extends NBTTag implements IManagedContainer {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     protected void readData(DataInputStream in) throws IOException {
-        this.setTagType(TagType.ARRAY);
-
         final byte arrayTypeByte = in.readByte();
         this.arrayType = TagType.valueOf(arrayTypeByte);
 
@@ -44,9 +47,10 @@ public class TagArray extends NBTTag implements IManagedContainer {
         Constructor<? extends ITag> tagConstructor = null;
         for(int i = 0; i < size; i++) {
             try {
-                tagConstructor = this.arrayType.getTagClass().getConstructor(DataInputStream.class, boolean.class);
+                tagConstructor = ((Class<? extends ITag>)this.arrayType.getTagClass().getSuperclass()).getDeclaredConstructor(DataInputStream.class, boolean.class);
                 tagConstructor.setAccessible(true);
                 this.addTag(tagConstructor.newInstance(in, this.isManaged()));
+                tagConstructor.setAccessible(false);
             } catch(Exception e) {
                 throw new IOException("Issue with constructing a new Tag while reading the InputStream!", e);
             } finally {
@@ -150,6 +154,11 @@ public class TagArray extends NBTTag implements IManagedContainer {
     protected void writeData(DataOutputStream out) throws IOException {
         // TODO Auto-generated method stub
         
+    }
+
+    @Override
+    public byte getID() {
+        return TagType.ARRAY.getID();
     }
     
 }

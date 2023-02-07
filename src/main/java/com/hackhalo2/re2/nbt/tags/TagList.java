@@ -16,6 +16,9 @@ public final class TagList extends NBTTag implements IUnmanagedContainer {
     private List<ITag> tags = new ArrayList<>();
     private TagType listType = TagType.NULL;
 
+    public TagList(DataInputStream in, boolean managed) throws NBTException, IOException {
+        super(in, managed);
+    }
 
     public TagList(String name, TagType listType) throws NBTException {
         this(name, listType, new ArrayList<>());
@@ -42,8 +45,6 @@ public final class TagList extends NBTTag implements IUnmanagedContainer {
 
     @Override
     protected void readData(DataInputStream in) throws IOException {
-        this.setTagType(TagType.LIST);
-
         final byte listTypeByte = in.readByte();
         this.listType = TagType.valueOf(listTypeByte); //Set up what list of tags we have
 
@@ -59,9 +60,10 @@ public final class TagList extends NBTTag implements IUnmanagedContainer {
         Constructor<? extends ITag> tagConstructor = null;
         for(int i = 0; i < size; i++) {
             try {
-                tagConstructor = this.listType.getTagClass().getConstructor(DataInputStream.class, boolean.class);
+                tagConstructor = this.listType.getTagClass().getDeclaredConstructor(DataInputStream.class, boolean.class);
                 tagConstructor.setAccessible(true);
                 this.addTag(tagConstructor.newInstance(in, this.isManaged()));
+                tagConstructor.setAccessible(false);
             } catch(Exception e) {
                 throw new IOException("Issue with constructing a new Tag while reading the InputStream!", e);
             } finally {
@@ -142,6 +144,11 @@ public final class TagList extends NBTTag implements IUnmanagedContainer {
         //We are done writting out our stuff
         out.writeByte(TagType.EOT.getID());
         
+    }
+
+    @Override
+    public byte getID() {
+        return TagType.LIST.getID();
     }
     
 }

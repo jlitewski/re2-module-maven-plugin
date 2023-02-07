@@ -1,8 +1,9 @@
 package com.hackhalo2.re2;
 
-import java.io.DataOutputStream;
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.File;
-import java.io.FileOutputStream;
+import java.io.FileInputStream;
 
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
@@ -12,19 +13,12 @@ import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
-import com.hackhalo2.re2.nbt.exceptions.NBTException;
-import com.hackhalo2.re2.nbt.tags.CompoundBuilder;
 import com.hackhalo2.re2.nbt.tags.NBTTag;
 import com.hackhalo2.re2.nbt.tags.TagCompound;
-import com.hackhalo2.re2.nbt.tags.TagList;
 import com.hackhalo2.re2.nbt.tags.TagString;
-import com.hackhalo2.re2.nbt.tags.TagType;
 
-/**
- * This Mojo builds the metadata file RenderEngine Modules use to function
- */
-@Mojo(name = "module-bundle", defaultPhase = LifecyclePhase.COMPILE)
-public class ModuleDataMojo extends AbstractMojo {
+@Mojo(name = "module-data-verify", defaultPhase = LifecyclePhase.VERIFY)
+public class DataVerifierMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${session}", readonly = true)
     private MavenSession mavenSession;
@@ -90,54 +84,46 @@ public class ModuleDataMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-        this.getLog().info("Generating module.data file...");
-        CompoundBuilder builder = new CompoundBuilder();
+        this.getLog().info("Verifying module.data file...");
 
-        try {
-            //Add all the tags that we can here
-            builder.start(this.name)
-                .addString("Author", this.author).addString("MainClass", this.mainClass)
-                .addString("Name", this.name).addString("Version", this.version)
-                .addString("LoadOrder", this.loadOrder);
-            
-            //If the contributors list isn't null, add it
-            if(this.contributors != null && this.contributors.length > 0) {
-                TagList tagContributors = new TagList("Contributors", TagType.STRING);
-                for(String contributor : this.contributors) {
-                    tagContributors.addTag(new TagString(null, contributor));
-                }
-                builder.addList(tagContributors);
-            }
-
-        } catch (NBTException e) {
-            throw new MojoFailureException("There was a problem with constructing the NBT Tag!", e);
-        }
-
-        FileOutputStream fileOut = null;
+        FileInputStream fileIn = null;
+        TagCompound compound = null;
         try {
             String rootDir = this.mavenSession.getExecutionRootDirectory();
-            fileOut = new FileOutputStream(new File(rootDir+File.separator+"module.data"));
+            fileIn = new FileInputStream(new File(rootDir+File.separator+"module.data"));
 
-            TagCompound compound = builder.build();
-            if(compound == null) {
-                throw new NullPointerException("We got a null tag when it shouldn't have been null!");
-            }
-
-            NBTTag.saveCompoundToStream(compound, new DataOutputStream(fileOut));
-
-        } catch (Exception e) {
-            throw new MojoFailureException("There was an issue saving the NBT Tag!", e);
+            compound = NBTTag.loadCompoundFromStream(new DataInputStream(new BufferedInputStream(fileIn)));
+        } catch(Exception e) {
+            throw new MojoFailureException("There was an issue loading the module.data file!", e);
         } finally {
             try {
-                if(fileOut != null) {
-                    fileOut.close();
+                if(fileIn != null) {
+                    fileIn.close();
                 }
             } catch(Exception e) {
-                throw new MojoFailureException("There was an issue trying to close the FileOutputStream in the finally block!", e);
+                throw new MojoFailureException("There was an issue trying to close the FileInputStream in the finally block!", e);
             }
         }
 
-        this.getLog().info("Done!");
+        this.checkMatch("Author", this.author, compound);
+        this.checkMatch("MainClass", this.mainClass, compound);
+        this.checkMatch("Name", this.name, compound);
+        this.checkMatch("Version", this.version, compound);
+        this.checkMatch("LoadOrder", this.loadOrder, compound);
+
+        //TODO: Check Contributors
+
+        this.getLog().info("File Verified!");
+    }
+
+    private void checkMatch(String name, String paraString, TagCompound compound) throws MojoFailureException {
+        //Check the Author Parameter
+        this.getLog().info("Checking for "+name+" match...");
+        TagString checkString = (TagString)(compound.getTag(name));
+
+        if(!paraString.equals(checkString.getValue())) {
+            throw new MojoFailureException(name+" did not match Parameter! Parameter: "+paraString+" TagString: "+checkString.getName()+"|"+checkString.getValue());
+        }
     }
     
 }

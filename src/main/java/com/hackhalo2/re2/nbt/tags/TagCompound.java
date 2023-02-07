@@ -13,22 +13,28 @@ import com.hackhalo2.re2.nbt.ITag;
 import com.hackhalo2.re2.nbt.exceptions.NBTException;
 
 public final class TagCompound extends NBTTag implements IManagedContainer {
-    private Map<String, ITag> compoundMap = new HashMap<>();
+    private Map<String, ITag> compoundMap;
 
     public TagCompound(final String name) {
         super(name, TagType.COMPOUND);
+        this.compoundMap = new HashMap<>();
+    }
+
+    protected TagCompound(final DataInputStream in, final boolean managed) throws NBTException, IOException {
+        super(in, managed);
     }
 
     @Override
     protected void readData(DataInputStream in) throws IOException {
-        this.setTagType(TagType.COMPOUND);
-
+        this.compoundMap = new HashMap<>();
         //Declare these here so we aren't building new objects every loop
         byte tagByte;
         TagType tagType;
         Constructor<? extends ITag> tagConstructor;
 
         do { //Read through the input stream for this compound until the EOT flag is hit
+            System.out.println(this.getName()+": Begin reading tag...");
+            
             tagByte = in.readByte();
             tagType = TagType.valueOf(tagByte);
 
@@ -36,9 +42,14 @@ public final class TagCompound extends NBTTag implements IManagedContainer {
 
             if(tagType == TagType.EOT) break; //break out of the loop once the End of Tag flag is hit
 
+            System.out.println(this.getName()+": Begin reading tag '"+tagType.name()+"'...");
+
             try { //Use reflection to construct the Tag
-                tagConstructor = tagType.getTagClass().getConstructor(DataInputStream.class, boolean.class);
+                tagConstructor = tagType.getTagClass().getDeclaredConstructor(DataInputStream.class, boolean.class);
+                tagConstructor.setAccessible(true);
                 this.addTag(tagConstructor.newInstance(in, this.isManaged()));
+                System.out.println(this.getName()+": Done reading Tag '"+tagType.name()+"'!");
+                tagConstructor.setAccessible(false);
             } catch(Exception e) { //Fail out if something happens with reading a tag
                 throw new IOException("Issue with constructing a new Tag while reading the InputStream!", e);
             } finally {
@@ -69,7 +80,7 @@ public final class TagCompound extends NBTTag implements IManagedContainer {
         nbtTag.setParent(this); //Set the Tag's parent to this Container
 
         this.compoundMap.put(tag.getName(), tag); //Add the tag to our internal map
-        
+        System.out.println("Added Tag "+tag.getName());
     }
 
     @Override
@@ -189,5 +200,10 @@ public final class TagCompound extends NBTTag implements IManagedContainer {
 	public TagCompound getCompound(String name) throws NBTException {
 		return (TagCompound)this.getTag(name, TagType.COMPOUND);
 	}
+
+    @Override
+    public byte getID() {
+        return TagType.COMPOUND.getID();
+    }
     
 }
